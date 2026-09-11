@@ -8,6 +8,11 @@
     "extractors/*",
     "shared"
   ],
+  "overrides": {
+    "jsonwebtoken": {
+      "ms": "2.1.3"
+    }
+  },
   "scripts": {
     "test:all": "npm --workspace orchestrator run test:run",
     "check:types:shared": "npm --workspace shared run check:types",

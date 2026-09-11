@@ -297,6 +297,7 @@ designResumeRouter.post(
       fileName: input.fileName,
       mediaType: input.mediaType ?? null,
     });
+    console.log("start import: " + "end import")
     const document = await importDesignResumeFromFile(input);
     logger.info("Design resume file import route service completed", {
       requestId: requestId ?? null,
