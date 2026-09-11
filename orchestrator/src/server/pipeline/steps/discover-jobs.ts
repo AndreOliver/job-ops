@@ -633,7 +633,19 @@ export async function discoverJobsStep(args: {
       }
 
       const locationFilterReasonCounts: Record<string, number> = {};
-      const locationFilteredJobs = discoveredJobs.filter((job) => {
+
+      const rejectedJobs: Array<{
+        title?: string;
+        company?: string;
+        source?: string;
+        rawLocation?: string | null;
+        isRemote?: boolean;
+        reasonCode: string;
+        locationEvidence: unknown;
+        nativeRadiusApplied: boolean;
+      }> = [];
+
+      /* const locationFilteredJobs = discoveredJobs.filter((job) => {
         const evidence =
           job.locationEvidence ??
           buildLocationEvidence({
@@ -641,20 +653,181 @@ export async function discoverJobsStep(args: {
             isRemote: job.isRemote,
             sourceNotes: [`source:${job.source}`],
           });
+
         job.locationEvidence = evidence;
+
+        const nativeRadiusApplied =
+          sourcePlanBySource.get(job.source as ExtractorSourceId)
+            ?.usesNativeRadius ?? false;
+
         const match = matchJobLocationIntent(job, locationIntent, {
-          nativeRadiusApplied:
-            sourcePlanBySource.get(job.source as ExtractorSourceId)
-              ?.usesNativeRadius ?? false,
+          nativeRadiusApplied,
         });
+
         if (match.matched) {
           return true;
         }
-        const reasonCode = match.reasonCode;
+
+        const reasonCode = match.reasonCode ?? "unknown";
+
         locationFilterReasonCounts[reasonCode] =
           (locationFilterReasonCounts[reasonCode] ?? 0) + 1;
+
+        const rejectedJob = {
+          title: job.title,
+          company: job.company,
+          source: job.source,
+          rawLocation: job.location ?? null,
+          isRemote: job.isRemote,
+          reasonCode,
+          locationEvidence: evidence,
+          nativeRadiusApplied,
+        };
+
+        rejectedJobs.push(rejectedJob);
+
+        logger.info("Job rejected by location filter", {
+          step: "discover-jobs",
+          ...rejectedJob,
+          locationIntent: {
+            selectedCountry: locationIntent.selectedCountry,
+            cities: locationIntent.cityLocations,
+            radiusMiles: locationIntent.proximity?.radiusMiles ?? null,
+          },
+        });
+
+        return false;
+      }); */
+
+      const BROWARD_COUNTY_CITIES = new Set([
+        "coconut creek",
+        "cooper city",
+        "coral springs",
+        "dania beach",
+        "davie",
+        "deerfield beach",
+        "fort lauderdale",
+        "hallandale beach",
+        "hollywood",
+        "lauderdale lakes",
+        "lauderhill",
+        "lighthouse point",
+        "margate",
+        "miramar",
+        "north lauderdale",
+        "oakland park",
+        "parkland",
+        "pembroke park",
+        "pembroke pines",
+        "plantation",
+        "pompano beach",
+        "southwest ranches",
+        "sunrise",
+        "tamarac",
+        "west park",
+        "weston",
+        "wilton manors",
+      ]);
+
+      const SOUTH_FLORIDA_CITIES = new Set([
+        ...BROWARD_COUNTY_CITIES,
+        "miami",
+        "miami beach",
+        "coral gables",
+        "aventura",
+        "sunny isles beach",
+        "boca raton",
+        "delray beach",
+        "west palm beach",
+        "palm beach",
+      ]);
+      
+      const locationFilteredJobs = discoveredJobs.filter((job) => {
+        const evidence = buildLocationEvidence({
+          location: job.locationEvidence?.location ?? job.location,
+          isRemote: job.isRemote,
+          sourceNotes: [`source:${job.source}`],
+        });
+
+        job.locationEvidence = evidence;
+
+        const nativeRadiusApplied =
+          sourcePlanBySource.get(job.source as ExtractorSourceId)
+            ?.usesNativeRadius ?? false;
+
+        const match = matchJobLocationIntent(job, locationIntent, {
+          nativeRadiusApplied,
+        });
+
+        const regionalMatch = matchesRegionalLocation(
+          job.location,
+          locationIntent.cityLocations,
+        );
+
+        if (match.matched || regionalMatch) {
+          return true;
+        }
+
+        const reasonCode = match.reasonCode ?? "unknown";
+
+        locationFilterReasonCounts[reasonCode] =
+          (locationFilterReasonCounts[reasonCode] ?? 0) + 1;
+
+        logger.info("Job rejected by location filter", {
+          step: "discover-jobs",
+          title: job.title,
+          source: job.source,
+          rawLocation: job.location ?? null,
+          normalizedLocation: job.location
+            ? normalizeLocationName(job.location)
+            : null,
+          isRemote: job.isRemote,
+          reasonCode,
+          matchResult: match,
+          locationEvidence: evidence,
+          nativeRadiusApplied,
+          locationIntent: {
+            selectedCountry: locationIntent.selectedCountry,
+            cities: locationIntent.cityLocations,
+            radiusMiles: locationIntent.proximity?.radiusMiles ?? null,
+          },
+        });
+
         return false;
       });
+
+      function normalizeLocationName(value: string): string {
+        return value
+          .toLowerCase()
+          .replace(/,\s*(fl|florida)(,\s*(us|usa|united states))?$/i, "")
+          .trim();
+      }
+
+      function matchesRegionalLocation(
+        rawLocation: string | null | undefined,
+        requestedLocations: string[],
+      ): boolean {
+        if (!rawLocation) {
+          return false;
+        }
+
+        const jobCity = normalizeLocationName(rawLocation);
+
+        return requestedLocations.some((requestedLocation) => {
+          const requested = requestedLocation.toLowerCase().trim();
+
+          if (requested === "broward county") {
+            return BROWARD_COUNTY_CITIES.has(jobCity);
+          }
+
+          if (requested === "south florida") {
+            return SOUTH_FLORIDA_CITIES.has(jobCity);
+          }
+
+          return jobCity === normalizeLocationName(requestedLocation);
+        });
+      }
+
       const locationFilteredOutCount =
         discoveredJobs.length - locationFilteredJobs.length;
 
@@ -664,13 +837,17 @@ export async function discoverJobsStep(args: {
           {
             step: "discover-jobs",
             droppedCount: locationFilteredOutCount,
+            discoveredCount: discoveredJobs.length,
+            acceptedCount: locationFilteredJobs.length,
             locationIntent: {
               selectedCountry: locationIntent.selectedCountry,
               cityCount: locationIntent.cityLocations.length,
+              cities: locationIntent.cityLocations,
               radiusMiles: locationIntent.proximity?.radiusMiles ?? null,
             },
             primaryLocation: getPrimaryLocationLabel(locationIntent),
             reasonCounts: locationFilterReasonCounts,
+            rejectedJobs,
           },
         );
       }
