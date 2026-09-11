@@ -22,6 +22,7 @@ services:
       # Server config
       - NODE_ENV=production
       - PORT=3001
+      - LLM_IMPORT_LOCAL_TIMEOUT_MS=900000
 
       # Python path (uses system python in container)
       - PYTHON_PATH=/usr/bin/python3
