@@ -106,7 +106,7 @@ RUN --mount=type=cache,id=npm-build-${BUILDARCH},target=/root/.npm \
 FROM node-deps AS build-sources
 
 COPY shared ./shared
-COPY docs-site ./docs-site
+# COPY docs-site ./docs-site
 COPY orchestrator ./orchestrator
 COPY career-boards/bamboohr ./career-boards/bamboohr
 COPY career-boards/greenhouse ./career-boards/greenhouse
@@ -131,10 +131,10 @@ COPY extractors/browser-utils ./extractors/browser-utils
 # ============================================================================
 # PARALLEL BUILD STAGES
 # ============================================================================
-FROM build-sources AS docs-build
+# FROM build-sources AS docs-build
 
-WORKDIR /app/docs-site
-RUN npm run build
+# WORKDIR /app/docs-site
+# RUN npm run build
 
 FROM build-sources AS client-build
 
@@ -249,7 +249,7 @@ COPY --from=camoufox-cache /root/.cache/camoufox /root/.cache/camoufox
 
 # Copy built assets and runtime source code.
 COPY --from=client-build /app/orchestrator/dist ./orchestrator/dist
-COPY --from=docs-build /app/docs-site/build ./orchestrator/dist/docs
+# COPY --from=docs-build /app/docs-site/build ./orchestrator/dist/docs
 COPY shared ./shared
 COPY orchestrator ./orchestrator
 COPY career-boards/bamboohr ./career-boards/bamboohr
